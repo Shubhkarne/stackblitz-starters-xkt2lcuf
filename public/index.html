@@ -49,7 +49,7 @@
       color: #fff;
       font-size: 0.95rem;
     }
-    .row > select { flex: 1 1 180px; }
+    .row > select { flex: 1 1 220px; }
     button.action {
       padding: 10px 14px;
       border-radius: 8px;
@@ -124,21 +124,19 @@
 
     <section id="mailSection" class="hidden">
       <div class="card">
-        <label for="mailAddressInput"><strong>Active Email Address</strong></label>
+        <label for="savedMailSelect"><strong>Select From 50+ Active Email Addresses</strong></label>
         <div class="row">
-          <input id="mailAddressInput" type="email" placeholder="e.g. averagedate33@agentmail.to" />
-          <button id="saveMailBtn" class="action secondary" type="button">Save</button>
-          <button id="copyMailBtn" class="action secondary" type="button">Copy</button>
-          <button id="refreshMailBtn" class="action" type="button">Refresh Now</button>
+          <select id="savedMailSelect"></select>
+          <button id="nextMailBtn" class="action secondary" type="button">Next Address</button>
+          <button id="copyMailBtn" class="action" type="button">Copy Email</button>
         </div>
         <div class="row">
-          <select id="savedMailSelect">
-            <option value="">-- Saved Email Addresses --</option>
-          </select>
-          <button id="randomMailBtn" class="action secondary" type="button">Random Label</button>
+          <input id="mailAddressInput" type="email" placeholder="Or enter custom address..." />
+          <button id="saveMailBtn" class="action secondary" type="button">Save</button>
+          <button id="refreshMailBtn" class="action secondary" type="button">Refresh Now</button>
           <button id="showAllMailBtn" class="action secondary" type="button">Show All Emails</button>
         </div>
-        <p class="meta" style="margin-bottom:0;">Auto-refresh: ON (every 5s while Temp Mail is open)</p>
+        <p class="meta" style="margin-bottom:0;">51 active real addresses loaded • Auto-refresh: ON (every 5s)</p>
       </div>
 
       <div class="card">
@@ -149,9 +147,17 @@
   </div>
 
   <script>
-    const DEFAULT_REAL_EMAIL = 'averagedate33@agentmail.to';
-    const RANDOM_LABEL_DOMAIN = 'templine.local';
-    const STORAGE_KEY = 'templine_saved_emails_v1';
+    const BASE_USER = 'averagedate33';
+    const BASE_DOMAIN = 'agentmail.to';
+    const STORAGE_KEY = 'templine_saved_emails_v2';
+
+    const DEFAULT_ADDRESSES = [
+      `${BASE_USER}@${BASE_DOMAIN}`,
+      ...Array.from({ length: 50 }, (_, i) => {
+        const num = String(i + 1).padStart(2, '0');
+        return `${BASE_USER}+mail${num}@${BASE_DOMAIN}`;
+      }),
+    ];
 
     const tabSms = document.getElementById('tabSms');
     const tabMail = document.getElementById('tabMail');
@@ -178,40 +184,31 @@
       return Number.isNaN(d.getTime()) ? String(iso || '') : d.toLocaleString();
     }
 
-    function generateRandomLabel() {
-      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-      let user = '';
-      for (let i = 0; i < 8; i++) {
-        user += chars[Math.floor(Math.random() * chars.length)];
-      }
-      return `${user}@${RANDOM_LABEL_DOMAIN}`;
-    }
-
-    function getSavedEmails() {
+    function getAllAddresses() {
+      let custom = [];
       try {
         const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (_) {
-        return [];
-      }
+        if (Array.isArray(parsed)) custom = parsed;
+      } catch (_) {}
+      return Array.from(new Set([...DEFAULT_ADDRESSES, ...custom]));
     }
 
-    function saveEmailAddress(addr) {
+    function saveCustomAddress(addr) {
       const clean = String(addr || '').trim().toLowerCase();
       if (!clean) return;
-      const list = getSavedEmails();
+      const list = getAllAddresses();
       if (!list.includes(clean)) {
-        list.unshift(clean);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 25)));
+        list.push(clean);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
       }
-      renderSavedEmails(clean);
+      renderAddressDropdown(clean);
     }
 
-    function renderSavedEmails(selected = '') {
-      const list = getSavedEmails();
-      savedMailSelect.innerHTML =
-        '<option value="">-- Saved Email Addresses --</option>' +
-        list.map((addr) => `<option value="${escapeHtml(addr)}">${escapeHtml(addr)}</option>`).join('');
+    function renderAddressDropdown(selected = '') {
+      const list = getAllAddresses();
+      savedMailSelect.innerHTML = list
+        .map((addr, idx) => `<option value="${escapeHtml(addr)}">#${idx + 1} — ${escapeHtml(addr)}</option>`)
+        .join('');
       if (selected && list.includes(selected)) {
         savedMailSelect.value = selected;
       }
@@ -219,7 +216,7 @@
 
     function renderMessages(targetEl, items, isEmail) {
       if (!items || items.length === 0) {
-        targetEl.innerHTML = `<p class="meta">${isEmail ? 'No emails received yet.' : 'No SMS messages yet.'}</p>`;
+        targetEl.innerHTML = `<p class="meta">${isEmail ? 'No emails received yet for this address.' : 'No SMS messages yet.'}</p>`;
         return;
       }
       targetEl.innerHTML = items.map((m) => `
@@ -311,22 +308,23 @@
     phoneSelect.addEventListener('change', loadSms);
     document.getElementById('refreshSmsBtn').addEventListener('click', loadSms);
 
-    document.getElementById('saveMailBtn').addEventListener('click', () => {
-      showAllMail = false;
-      saveEmailAddress(mailAddressInput.value);
-      loadMail();
-    });
-
     savedMailSelect.addEventListener('change', () => {
-      if (!savedMailSelect.value) return;
       showAllMail = false;
       mailAddressInput.value = savedMailSelect.value;
       loadMail();
     });
 
-    document.getElementById('randomMailBtn').addEventListener('click', () => {
+    document.getElementById('nextMailBtn').addEventListener('click', () => {
+      const nextIdx = (savedMailSelect.selectedIndex + 1) % savedMailSelect.options.length;
+      savedMailSelect.selectedIndex = nextIdx;
       showAllMail = false;
-      mailAddressInput.value = generateRandomLabel();
+      mailAddressInput.value = savedMailSelect.value;
+      loadMail();
+    });
+
+    document.getElementById('saveMailBtn').addEventListener('click', () => {
+      showAllMail = false;
+      saveCustomAddress(mailAddressInput.value);
       loadMail();
     });
 
@@ -340,7 +338,7 @@
       if (!val) return;
       await navigator.clipboard.writeText(val);
       e.target.textContent = 'Copied!';
-      setTimeout(() => { e.target.textContent = 'Copy'; }, 1200);
+      setTimeout(() => { e.target.textContent = 'Copy Email'; }, 1200);
     });
 
     document.getElementById('refreshMailBtn').addEventListener('click', () => {
@@ -352,10 +350,9 @@
     });
 
     (async function init() {
-      saveEmailAddress(DEFAULT_REAL_EMAIL);
-      const saved = getSavedEmails();
-      renderSavedEmails(saved[0] || DEFAULT_REAL_EMAIL);
-      mailAddressInput.value = saved[0] || DEFAULT_REAL_EMAIL;
+      const first = DEFAULT_ADDRESSES[0];
+      renderAddressDropdown(first);
+      mailAddressInput.value = first;
       await loadConfig();
       await loadSms();
     })();
