@@ -23,8 +23,17 @@
     h2 { margin: 0 0 10px; font-size: 1.15rem; color: #f8fafc; }
     h3 { margin: 14px 0 4px; font-size: 0.98rem; color: #e2e8f0; }
     .meta { color: #94a3b8; font-size: 0.88rem; }
-    .tabs { display: flex; gap: 8px; margin: 16px 0; }
+    .tabs {
+      position: relative;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+      margin: 16px 0;
+    }
     .tab-btn {
+      position: relative;
+      z-index: 21;
+      touch-action: manipulation;
       padding: 10px 16px;
       border-radius: 8px;
       border: 1px solid #334155;
@@ -248,5 +257,66 @@
       <h2>How TempLine Disposable Email &amp; OTP Verification Works</h2>
       <p class="meta">TempLine provides instant disposable email aliases and temporary phone numbers so developers, QA testers, and everyday users can receive 4–8 digit verification codes without exposing their primary inbox to spam.</p>
       <h3>1. Choose or Cycle Through 50+ Active Email Aliases</h3>
-      <p class="meta">
- 
+      <p class="meta">Open the Temp Mail tab, select any preloaded address (or tap Next Address), and copy it with one click.</p>
+      <h3>2. Automatic OTP Code Extraction</h3>
+      <p class="meta">As soon as a verification email arrives, TempLine automatically highlights the OTP code and gives you a one-tap Copy Code button.</p>
+      <h3>3. Safe Usage Guidelines</h3>
+      <p class="meta">Because temporary messages are cleared automatically when the server restarts, never use disposable inboxes for financial accounts or long-term recovery.</p>
+    </div>
+
+    <footer>
+      <a href="/privacy.html">Privacy Policy</a> &bull;
+      <a href="/terms.html">Terms of Service</a> &bull;
+      <a href="mailto:averagedate33@agentmail.to">Contact</a>
+      <p style="margin:8px 0 0;">&copy; 2026 TempLine Inbox</p>
+    </footer>
+  </div>
+
+  <script>
+    const BASE_USER = 'averagedate33';
+    const BASE_DOMAIN = 'agentmail.to';
+    const STORAGE_KEY = 'templine_saved_emails_v2';
+
+    const DEFAULT_ADDRESSES = [
+      `${BASE_USER}@${BASE_DOMAIN}`,
+      ...Array.from({ length: 50 }, (_, i) => {
+        const num = String(i + 1).padStart(2, '0');
+        return `${BASE_USER}+mail${num}@${BASE_DOMAIN}`;
+      }),
+    ];
+
+    const tabSms = document.getElementById('tabSms');
+    const tabMail = document.getElementById('tabMail');
+    const smsSection = document.getElementById('smsSection');
+    const mailSection = document.getElementById('mailSection');
+    const phoneSelect = document.getElementById('phoneSelect');
+    const smsList = document.getElementById('smsList');
+    const mailAddressInput = document.getElementById('mailAddressInput');
+    const savedMailSelect = document.getElementById('savedMailSelect');
+    const mailList = document.getElementById('mailList');
+
+    let activeChannel = 'sms';
+    let showAllMail = false;
+    let pollTimer = null;
+
+    function escapeHtml(str = '') {
+      return String(str).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function formatDate(iso) {
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? String(iso || '') : d.toLocaleString();
+    }
+
+    function getAllAddresses() {
+      let custom = [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        if (Array.isArray(parsed)) custom = parsed;
+      } catch (_) {}
+      return Array.from(new Set([...DEFAULT_ADDRESSES, ...custom]));
+    }
+
+    function saveCustomAddress(addr) {
