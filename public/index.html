@@ -40,8 +40,8 @@
     }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
     select, input {
-      flex: 1;
-      min-width: 190px;
+      flex: 1 1 100%;
+      min-width: 0;
       padding: 10px 12px;
       border-radius: 8px;
       border: 1px solid #475569;
@@ -49,6 +49,7 @@
       color: #fff;
       font-size: 0.95rem;
     }
+    .row > select { flex: 1 1 180px; }
     button.action {
       padding: 10px 14px;
       border-radius: 8px;
@@ -172,6 +173,11 @@
       }[c]));
     }
 
+    function formatDate(iso) {
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? String(iso || '') : d.toLocaleString();
+    }
+
     function generateRandomLabel() {
       const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
       let user = '';
@@ -219,7 +225,7 @@
       targetEl.innerHTML = items.map((m) => `
         <div class="msg">
           ${isEmail ? `<div><strong>${escapeHtml(m.subject || '(No Subject)')}</strong></div>` : ''}
-          <div class="meta">From: ${escapeHtml(m.from)} • To: ${escapeHtml(m.to)} • ${new Date(m.receivedAt).toLocaleString()}</div>
+          <div class="meta">From: ${escapeHtml(m.from)} • To: ${escapeHtml(m.to || '(not provided)')} • ${escapeHtml(formatDate(m.receivedAt))}</div>
           ${m.code ? `
             <div class="code-row">
               <span class="code">OTP / Code: ${escapeHtml(m.code)}</span>
