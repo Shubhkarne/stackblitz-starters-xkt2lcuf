@@ -16,7 +16,7 @@
       line-height: 1.5;
     }
     @media (max-width: 600px) {
-      body { padding-top: 76px; }
+      body { padding-top: 56px; }
     }
     .container { max-width: 820px; margin: 0 auto; }
     h1 { margin: 0 0 6px; font-size: 1.6rem; }
@@ -25,14 +25,14 @@
     .meta { color: #94a3b8; font-size: 0.88rem; }
     .tabs {
       position: relative;
-      z-index: 20;
+      z-index: 999;
       display: flex;
       gap: 8px;
       margin: 16px 0;
     }
     .tab-btn {
       position: relative;
-      z-index: 21;
+      z-index: 1000;
       touch-action: manipulation;
       padding: 10px 16px;
       border-radius: 8px;
@@ -174,8 +174,8 @@
     <p class="meta">Temporary SMS &amp; email OTP inbox. Avoid using for banking, personal, or sensitive accounts.</p>
 
     <div class="tabs">
-      <button id="tabSms" class="tab-btn active" type="button">SMS Inbox</button>
-      <button id="tabMail" class="tab-btn" type="button">Temp Mail</button>
+      <button id="tabSms" class="tab-btn active" type="button" onclick="window.switchTempLineTab && window.switchTempLineTab('sms')">SMS Inbox</button>
+      <button id="tabMail" class="tab-btn" type="button" onclick="window.switchTempLineTab && window.switchTempLineTab('email')">Temp Mail</button>
     </div>
 
     <section id="smsSection">
@@ -320,3 +320,182 @@
     }
 
     function saveCustomAddress(addr) {
+      const clean = String(addr || '').trim().toLowerCase();
+      if (!clean) return;
+      const list = getAllAddresses();
+      if (!list.includes(clean)) {
+        list.push(clean);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      }
+      renderAddressDropdown(clean);
+    }
+
+    function renderAddressDropdown(selected = '') {
+      const list = getAllAddresses();
+      savedMailSelect.innerHTML = list
+        .map((addr, idx) => `<option value="${escapeHtml(addr)}">#${idx + 1} — ${escapeHtml(addr)}</option>`)
+        .join('');
+      if (selected && list.includes(selected)) {
+        savedMailSelect.value = selected;
+      }
+    }
+
+    function renderMessages(targetEl, items, isEmail) {
+      if (!items || items.length === 0) {
+        targetEl.innerHTML = `<p class="meta">${isEmail ? 'No emails received yet for this address.' : 'No SMS messages yet.'}</p>`;
+        return;
+      }
+      targetEl.innerHTML = items.map((m) => `
+        <div class="msg">
+          ${isEmail ? `<div><strong>${escapeHtml(m.subject || '(No Subject)')}</strong></div>` : ''}
+          <div class="meta">From: ${escapeHtml(m.from)} &bull; To: ${escapeHtml(m.to || '(not provided)')} &bull; ${escapeHtml(formatDate(m.receivedAt))}</div>
+          ${m.code ? `
+            <div class="code-row">
+              <span class="code">OTP / Code: ${escapeHtml(m.code)}</span>
+              <button class="copy-btn" type="button" data-code="${escapeHtml(m.code)}">Copy Code</button>
+            </div>
+          ` : ''}
+          <pre>${escapeHtml(m.body)}</pre>
+        </div>
+      `).join('');
+
+      targetEl.querySelectorAll('.copy-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(btn.dataset.code);
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy Code'; }, 1200);
+        });
+      });
+    }
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.phoneNumbers) && data.phoneNumbers.length > 0) {
+          phoneSelect.innerHTML = data.phoneNumbers
+            .map((num) => `<option value="${escapeHtml(num)}">${escapeHtml(num)}</option>`)
+            .join('');
+        }
+      } catch (_) {}
+    }
+
+    async function loadSms() {
+      try {
+        const phone = encodeURIComponent(phoneSelect.value.trim());
+        const res = await fetch(`/api/messages?channel=sms&recipient=${phone}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderMessages(smsList, data.messages, false);
+      } catch (_) {
+        smsList.innerHTML = `<p class="meta">No SMS messages yet.</p>`;
+      }
+    }
+
+    async function loadMail() {
+      try {
+        const addr = mailAddressInput.value.trim().toLowerCase();
+        const url = (!showAllMail && addr)
+          ? `/api/messages?channel=email&recipient=${encodeURIComponent(addr)}`
+          : '/api/messages?channel=email';
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderMessages(mailList, data.messages, true);
+      } catch (_) {
+        mailList.innerHTML = `<p class="meta">No emails received yet for this address.</p>`;
+      }
+    }
+
+    function startMailPolling() {
+      stopMailPolling();
+      pollTimer = setInterval(() => {
+        if (activeChannel === 'email' && document.visibilityState === 'visible') {
+          loadMail();
+        }
+      }, 5000);
+    }
+
+    function stopMailPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    function setTab(channel) {
+      activeChannel = channel;
+      const isSms = channel === 'sms';
+      tabSms.classList.toggle('active', isSms);
+      tabMail.classList.toggle('active', !isSms);
+      smsSection.classList.toggle('hidden', !isSms);
+      mailSection.classList.toggle('hidden', isSms);
+      if (isSms) {
+        stopMailPolling();
+        loadSms();
+      } else {
+        loadMail();
+        startMailPolling();
+      }
+    }
+
+    window.switchTempLineTab = setTab;
+
+    tabSms.addEventListener('click', () => setTab('sms'));
+    tabMail.addEventListener('click', () => setTab('email'));
+    phoneSelect.addEventListener('change', loadSms);
+    document.getElementById('refreshSmsBtn').addEventListener('click', loadSms);
+
+    savedMailSelect.addEventListener('change', () => {
+      showAllMail = false;
+      mailAddressInput.value = savedMailSelect.value;
+      loadMail();
+    });
+
+    document.getElementById('nextMailBtn').addEventListener('click', () => {
+      const nextIdx = (savedMailSelect.selectedIndex + 1) % savedMailSelect.options.length;
+      savedMailSelect.selectedIndex = nextIdx;
+      showAllMail = false;
+      mailAddressInput.value = savedMailSelect.value;
+      loadMail();
+    });
+
+    document.getElementById('saveMailBtn').addEventListener('click', () => {
+      showAllMail = false;
+      saveCustomAddress(mailAddressInput.value);
+      loadMail();
+    });
+
+    document.getElementById('showAllMailBtn').addEventListener('click', () => {
+      showAllMail = true;
+      loadMail();
+    });
+
+    document.getElementById('copyMailBtn').addEventListener('click', async (e) => {
+      const val = mailAddressInput.value.trim();
+      if (!val) return;
+      await navigator.clipboard.writeText(val);
+      e.target.textContent = 'Copied!';
+      setTimeout(() => { e.target.textContent = 'Copy Email'; }, 1200);
+    });
+
+    document.getElementById('refreshMailBtn').addEventListener('click', () => {
+      loadMail();
+    });
+
+    mailAddressInput.addEventListener('input', () => {
+      showAllMail = false;
+    });
+
+    function init() {
+      const first = DEFAULT_ADDRESSES[0];
+      renderAddressDropdown(first);
+      mailAddressInput.value = first;
+      Promise.allSettled([loadConfig(), loadSms()]);
+    }
+
+    init();
+  </script>
+</body>
+</html>
