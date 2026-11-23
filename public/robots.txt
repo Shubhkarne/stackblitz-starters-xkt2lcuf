@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://templine-sms.onrender.com/sitemap.xml
